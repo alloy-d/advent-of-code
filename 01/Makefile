@@ -1,6 +1,6 @@
-PACKAGES=-package base -package stdio
+PACKAGES=-package core -package stdio
 OCAMLFIND=ocamlfind
-OCAMLFIND_ARGS=ocamlc -linkpkg $(PACKAGES)
+OCAMLFIND_ARGS=ocamlc -thread -linkpkg $(PACKAGES)
 
 all: solve.byte
 
