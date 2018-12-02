@@ -31,4 +31,4 @@ let () =
   let deviant_position = find_deviant_position ids in
   find_common_letters deviant_position ids
   |> format_result
-  |> Out_channel.printf "%s"
+  |> Out_channel.printf "%s\n"
