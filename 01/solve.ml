@@ -1,12 +1,16 @@
 open Base
 open Stdio
 
-let () =
-  let result = In_channel.fold_lines
-    stdin
+let determine_final_shift shifts =
+  List.fold shifts
     ~init:0
-    ~f:(fun freq shift_string ->
-      let shift = Int.of_string shift_string in
-      freq + shift)
-  in
-  Out_channel.printf "%d" result
+    ~f:(fun freq shift -> freq + shift)
+
+let parsed_shifts shift_strings =
+  List.map shift_strings Int.of_string
+
+let () =
+  In_channel.input_lines stdin
+  |> parsed_shifts
+  |> determine_final_shift
+  |> Out_channel.printf "%d"
