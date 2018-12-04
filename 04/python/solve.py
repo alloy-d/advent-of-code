@@ -72,7 +72,7 @@ def find_sleepiest(summarized_ranges):
     counts = map(counter, summarized_ranges)
 
     by_minutes = sorted(counts,
-                        key=lambda c: sum(c[1]),
+                        key=lambda c: max(c[1]),
                         reverse=True)
     
     sleepiest = by_minutes[0]
