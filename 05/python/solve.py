@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+import multiprocessing.pool
 from functools import reduce
 from itertools import zip_longest
 from operator import concat
@@ -34,9 +35,15 @@ def remove_unit_type_and_react(type, units):
     removed = set([type.lower(), type.upper()])
     return react_until_stable(list(filter(lambda c: c not in removed, units)))
 
+def run_inhibition_test_job(job):
+    (type_to_remove, units) = job
+    return (type_to_remove,
+            len(remove_unit_type_and_react(type_to_remove, units)))
+
 def find_inhibiting_unit_type(units):
-    results = map(lambda u: (u, len(remove_unit_type_and_react(u, units))),
-                  unit_types)
+    jobs = map(lambda u: (u, units), unit_types)
+    with multiprocessing.pool.Pool() as pool:
+        results = pool.map(run_inhibition_test_job, jobs)
     return sorted(results, key=lambda r: r[1])[0]
 
 def run(input):
