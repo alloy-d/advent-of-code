@@ -6,9 +6,10 @@ from itertools import zip_longest
 from operator import concat
 from sys import stdin
 
+unit_types = list(map(chr, range(ord('a'), ord('z')+1)))
 reacting_pairs = set(reduce(concat,
-                            ([(c, c.upper()), (c.upper(), c)]
-                             for c in map(chr, range(ord('a'), ord('z')+1)))))
+                            ([(t, t.upper()), (t.upper(), t)]
+                             for t in unit_types)))
 
 def react_once(units):
     accum = []
@@ -29,10 +30,25 @@ def react_until_stable(units):
         current_length = len(units)
     return units
 
+def remove_unit_type_and_react(type, units):
+    removed = set([type.lower(), type.upper()])
+    return react_until_stable(list(filter(lambda c: c not in removed, units)))
+
+def find_inhibiting_unit_type(units):
+    results = map(lambda u: (u, len(remove_unit_type_and_react(u, units))),
+                  unit_types)
+    return sorted(results, key=lambda r: r[1])[0]
+
 def run(input):
-    print("""\
-    In the fully reacted polymer, {0} units remain.
-    """.format(len(react_until_stable(list(input)))))
+    units = list(input)
+    units_after_reacting = react_until_stable(units)
+    (inhibiting_unit, size_without_inhibitor) =\
+        find_inhibiting_unit_type(units)
+    print(F"""\
+In the fully reacted polymer, {len(units_after_reacting)} units remain.
+
+Unit '{inhibiting_unit}' inhibits the polymer.
+Removing it results in a polymer of size {size_without_inhibitor}.""")
 
 if __name__ == "__main__":
     run(stdin.readline().rstrip())
