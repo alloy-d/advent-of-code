@@ -53,7 +53,6 @@ def produce_areas(coords):
     enlarged = set(coords)
 
     while enlarged > infinite:
-        print(f"distance: {distance}, enlarged: {enlarged}")
         distance += 1
         enlargements = {}
 
