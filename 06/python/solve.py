@@ -88,16 +88,50 @@ def produce_areas(coords):
 def largest_area(results):
     key = lambda area: area[1]
     infinite = results["infinite"]
-    print(f"infinite: {infinite}")
     useful_coords = filter(lambda v: v[1] != None and v[1] not in infinite,
                            results["areas"].values())
     grouped = groupby(sorted(useful_coords, key=key), key)
     sized = map(lambda group: (group[0], len(list(group[1]))), grouped)
     return max(sized, key=lambda group: group[1])
 
+def center_of_field(coords):
+    sums = reduce(lambda acc,item: (acc[0]+item[0], acc[1]+item[1]), coords)
+    return (sums[0] // len(coords), sums[1] // len(coords))
+
+def distance_between(a,b):
+    return abs(b[0]-a[0]) + abs(b[1]-a[1])
+
+def total_distance_from_all(target, coords):
+    distances = (distance_between(target, coord) for coord in coords)
+    return sum(distances)
+
+def find_close_region(target_distance, coords):
+    center = center_of_field(coords)
+    region = set()
+    added = set([center])
+    distance = -1
+
+    while len(added) > 0:
+        added = set()
+        distance += 1
+        for target in coords_within_distance(distance, center):
+            if total_distance_from_all(target, coords) < target_distance:
+                region.add(target)
+                added.add(target)
+
+    return region
+
 def solve():
     coords = [tuple(map(int, line.split(", "))) for line in stdin]
-    print(largest_area(produce_areas(coords)))
+    largest = largest_area(produce_areas(coords))
+    print(f"""
+    The largest area is has size {largest[1]}.
+    It's centered around {largest[0]}.
+
+    The approximate center of the field is {center_of_field(coords)}.
+    The region within 10,000 units of all coordinates has size \
+{len(find_close_region(10000, coords))}.
+    """)
 
 if __name__ == "__main__":
     solve()
