@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import re
-from itertools import groupby
+from itertools import groupby, repeat
 from sys import stdin
 
 def parse(line):
@@ -40,7 +40,54 @@ def sequence(dependency_map):
 
     return order
     
+def time_for_task(task):
+    return 61 + ord(task) - ord("A")
+
+class Worker:
+    def __init__(self):
+        self.free()
+
+    def free(self):
+        self.task = None
+        self.completion_time = None
+
+def sequence_with_workers(depedency_map, num_workers):
+    all_steps = set(dependency_map.keys())
+    completed = set()
+    now = 0
+    workers = []
+    for i in range(num_workers):
+        workers.append(Worker())
+
+    while completed < all_steps:
+        for worker in workers:
+            if worker.completion_time == now:
+                completed.add(worker.task)
+                worker.free()
+
+        ongoing = set(w.task for w in workers if w.task != None)
+        ready_workers = [w for w in workers if w.task == None]
+        ready_tasks = sorted(step for step, deps
+                             in dependency_map.items()
+                             if step not in completed
+                             and step not in ongoing
+                             and deps <= completed)
+
+        for worker, task in zip(ready_workers, ready_tasks):
+            worker.task = task
+            worker.completion_time = now + time_for_task(task)
+
+        now += 1
+
+    return now - 1
 
 if __name__ == "__main__":
     dependency_map = group_deps([parse(line) for line in stdin])
-    print("".join(sequence(dependency_map)))
+    single_worker_sequence = "".join(sequence(dependency_map))
+    multiworker_time = sequence_with_workers(dependency_map, 5)
+
+    print(f"""\
+    The sequence for a single worker is {single_worker_sequence}.
+
+    With 5 workers, it takes {multiworker_time} seconds.\
+    """)
