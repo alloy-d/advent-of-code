@@ -5,6 +5,46 @@ from itertools import cycle
 players = 419
 last_marble = 72164
 
+class Marble:
+    def __init__(self, value):
+        self.value = value
+
+class Circle:
+    def __init__(self):
+        zero = Marble(0)
+        zero.clockwise = zero
+        zero.anticlockwise = zero
+        self.current = zero
+
+    def move(self, distance):
+        """Move by `distance` marbles, where negative values
+        of distance move anticlockwise."""
+
+        for i in range(abs(distance)):
+            if distance < 0:
+                self.current = self.current.anticlockwise
+            else:
+                self.current = self.current.clockwise
+        
+    def insert(self, value):
+        inserted = Marble(value)
+
+        inserted.anticlockwise = self.current.anticlockwise
+        inserted.clockwise = self.current
+
+        inserted.anticlockwise.clockwise = inserted
+        inserted.clockwise.anticlockwise = inserted
+
+        self.current = inserted
+
+    def pop(self):
+        removed = self.current
+        self.current = removed.clockwise
+        removed.anticlockwise.clockwise = removed.clockwise
+        removed.clockwise.anticlockwise = removed.anticlockwise
+
+        return removed.value
+
 class Game:
     def __init__(self, players, last_marble):
         self.players = players
@@ -13,41 +53,24 @@ class Game:
         self._turns = cycle(range(players))
         self._marbles = iter(range(last_marble))
 
-        self.circle = [next(self._marbles)]
-        self.current_marble = 0
+        self.circle = Circle()
 
         self.scores = dict()
-
-    def shift_current_marble(self, shift):
-        """Updates the current marble by `shift`.
-
-        Negative values of shift represent counterclockwise shifts.
-        """
-
-        index = self.current_marble + shift
-        if index < 0:
-            # We've shifted counterclockwise past the beginning of the list.
-            self.current_marble = len(self.circle) + index
-        elif index > len(self.circle):
-            # We've shifted clockwise past the next open position.
-            self.current_marble = index - len(self.circle)
-        else:
-            self.current_marble = index
 
     def _run_turn(self, player, marble):
         if marble % 23 == 0:
             score = self.scores.get(player, 0)
-            self.shift_current_marble(-7)
+            self.circle.move(-7)
 
-            removed = self.circle.pop(self.current_marble)
+            removed = self.circle.pop()
 
             score += removed
             score += marble
             self.scores[player] = score
 
         else:
-            self.shift_current_marble(2)
-            self.circle.insert(self.current_marble, marble)
+            self.circle.move(2)
+            self.circle.insert(marble)
 
     def take_turn(self):
         player = next(self._turns)
@@ -60,6 +83,8 @@ class Game:
             player = next(self._turns)
             self._run_turn(player, marble)
 
-game = Game(players, last_marble)
-game.play_game()
-print(f"The high score is {max(game.scores.values())}.")
+for last in [last_marble, last_marble * 100]:
+    game = Game(players, last)
+    game.play_game()
+
+    print(f"The high score with a last marble of {last_marble} is {max(game.scores.values())}.")
