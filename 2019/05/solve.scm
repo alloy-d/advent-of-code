@@ -15,6 +15,12 @@
   (set! pos 0))
 (reset!)
 
+(define (debug)
+  (display "pos: ")
+  (display pos)
+  (newline)
+  (display program)
+  (newline))
 
 (define (get-at pos)
   (vector-ref program pos))
@@ -71,12 +77,29 @@
   (display "OUTPUT: ")
   (display (get-0 (+ pos 1)))
   (newline))
-(define (debug)
-  (display "pos: ")
-  (display pos)
-  (newline)
-  (display program)
-  (newline))
+
+(define (handle-jump-if! test)
+  (lambda (get-0 get-1)
+    (if (test (get-0 (+ pos 1)))
+        (set! pos (get-1 (+ pos 2)))
+        (advance! 3))))
+(define handle-jump-if-true!
+  (handle-jump-if! (compose not zero?)))
+(define handle-jump-if-false!
+  (handle-jump-if! zero?))
+
+(define (handle-cmp! test)
+  (lambda (get-0 get-1)
+    (set-reffed! (+ pos 3)
+                 (if (test (get-0 (+ pos 1))
+                           (get-1 (+ pos 2)))
+                     1
+                     0))))
+(define handle-less-than!
+  (handle-cmp! <))
+(define handle-equals!
+  (handle-cmp! =))
+
 (define (handle!)
   (let* ((instruction (get-at pos))
          (opcode (opcode-part instruction))
@@ -84,22 +107,37 @@
     ;(debug)
     (cond
       ((= opcode 99) (handle-halt))
-      ((= opcode 1) (begin
-                      (apply handle-add! (mode-procs modes 2))
-                      (advance! 4)
-                      (handle!)))
-      ((= opcode 2) (begin
-                      (apply handle-multiply! (mode-procs modes 2))
-                      (advance! 4)
-                      (handle!)))
-      ((= opcode 3) (begin
-                      (handle-store-input!)
-                      (advance! 2)
-                      (handle!)))
-      ((= opcode 4) (begin
-                      (apply handle-output (mode-procs modes 1))
-                      (advance! 2)
-                      (handle!))))))
+
+      ((= opcode 1) (apply handle-add! (mode-procs modes 2))
+                    (advance! 4)
+                    (handle!))
+
+      ((= opcode 2) (apply handle-multiply! (mode-procs modes 2))
+                    (advance! 4)
+                    (handle!))
+
+      ((= opcode 3) (handle-store-input!)
+                    (advance! 2)
+                    (handle!))
+
+      ((= opcode 4) (apply handle-output (mode-procs modes 1))
+                    (advance! 2)
+                    (handle!))
+
+      ((= opcode 5) (apply handle-jump-if-true! (mode-procs modes 2))
+                    (handle!))
+
+      ((= opcode 6) (apply handle-jump-if-false! (mode-procs modes 2))
+                    (handle!))
+
+      ((= opcode 7) (apply handle-less-than! (mode-procs modes 2))
+                    (advance! 4)
+                    (handle!))
+
+      ((= opcode 8) (apply handle-equals! (mode-procs modes 2))
+                    (advance! 4)
+                    (handle!))
+      )))
 
 (define (seq start stop)
   (let loop ((value start)
