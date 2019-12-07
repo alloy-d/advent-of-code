@@ -1,4 +1,5 @@
 (import (chicken io)
+        (chicken process-context)
         (chicken string))
 
 
@@ -158,3 +159,5 @@
       (begin
         (load! (car args))
         (handle!))))
+
+(main (command-line-arguments))
