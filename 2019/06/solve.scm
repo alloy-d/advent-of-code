@@ -14,9 +14,11 @@
 (define (object-orbited object orbit-map)
   (cadr (assoc object orbit-map)))
 
+(define (path-to-center orbit-map object)
+  (if (equal? object COM) '()
+      (cons object (path-to-center orbit-map (object-orbited object orbit-map)))))
 (define (number-of-orbits orbit-map object)
-  (if (equal? object COM) 0
-      (+ 1 (number-of-orbits orbit-map (object-orbited object orbit-map)))))
+  (length (path-to-center orbit-map object)))
 
 (define (parse-line line)
   (string-split line ")"))
@@ -32,6 +34,34 @@
 (define objects
   (map car orbit-map))
 
-(display
-  (foldl + 0
-         (map (lambda (object) (number-of-orbits orbit-map object)) objects)))
+(begin
+  (display
+    (foldl + 0
+           (map (lambda (object) (number-of-orbits orbit-map object)) objects)))
+  (newline))
+
+(define (distance-to-target orbit-map start target)
+  (let ((target-to-center (path-to-center orbit-map target))
+        (start-to-center (path-to-center orbit-map start)))
+    (let loop ((path-to-start (reverse start-to-center))
+               (path-to-target (reverse target-to-center)))
+      (cond
+        ((and (null? path-to-start)
+              (null? path-to-target))
+         0)
+
+        ((null? path-to-start)
+         (+ 1 (loop '() (cdr path-to-target))))
+        ((null? path-to-target)
+         (+ 1 (loop (cdr path-to-start) '())))
+
+        ((equal? (car path-to-start) (car path-to-target))
+         (loop (cdr path-to-start) (cdr path-to-target)))
+
+        (else (+ 2 (loop (cdr path-to-target) (cdr path-to-start))))))))
+
+(begin
+  (display
+    ; - 2 because we don't want to orbit Santa, just the thing he's orbiting.
+    (- (distance-to-target orbit-map "YOU" "SAN") 2))
+  (newline))
