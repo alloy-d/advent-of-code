@@ -1,163 +1,153 @@
-(import (chicken io)
+(import (chicken bitwise)
+        (chicken io)
         (chicken process-context)
         (chicken string))
 
+; like (define x func), except works in a letrec when func is also
+; declared in the letrec and its value is not yet available
+(define-syntax wrapper
+  (syntax-rules ()
+    ((wrapper func)
+     (lambda args (apply func args)))))
 
-(define (read-input)
-  (map string->number
-       (string-split (string-chomp (read-string)) ",")))
+(define (read-program)
+  (list->vector
+    (map string->number
+         (string-split (string-chomp (read-string)) ","))))
 
-(define pos 0)
-(define initial-state '())
-
-(define (load! input-file)
-  (set! initial-state
-    (with-input-from-file input-file read-input))
-  (reset!))
-
-(define (reset!)
-  (set! program (list->vector initial-state))
-  (set! pos 0))
-(reset!)
-
-(define (debug)
-  (display "pos: ")
-  (display pos)
-  (newline)
-  (display program)
-  (newline))
-
-(define (get-at pos)
-  (vector-ref program pos))
-(define (get-reffed ref-pos)
-  (get-at (get-at ref-pos)))
-
-(define position get-reffed)
-(define immediate get-at)
-
-(define (set-at! pos val)
-  (vector-set! program pos val))
-(define (set-reffed! pos val)
-  (set-at! (get-at pos) val))
-
-(define (advance! amount)
-  (set! pos (+ amount pos)))
-
-(define (do-math! op get-0 get-1)
-  (let* ((a (get-0 (+ 1 pos)))
-         (b (get-1 (+ 2 pos)))
-         (result (op a b)))
-    (set-reffed! (+ 3 pos) result)))
+(define (read-program-from-file input-file)
+  (with-input-from-file input-file read-program))
 
 (define (opcode-part instruction)
   (remainder instruction 100))
 (define (modes-part instruction)
   (floor (/ instruction 100)))
 
+; in: a binary-looking number in decimal form, like 1001
+; out: a number that has that binary form, like 9
+(define (decbin->bin num)
+  (if (= num 0) 0
+      (+ (arithmetic-shift (decbin->bin (floor (/ num 10))) 1)
+         (remainder num 10))))
+
 ; returns the mode of the parameter at index, given modes.
 ; indices are 0-based.
 (define (mode modes index)
-  (remainder (floor (/ modes (expt 10 index)))
-             10))
-(define (mode-proc modes index)
-  (if (= 0 (mode modes index))
-      position
-      immediate))
-(define (mode-procs modes count)
-  (let loop ((index 0))
-    (if (= index count) '()
-        (cons (mode-proc modes index)
-              (loop (+ index 1))))))
+  (bitwise-and 1 (arithmetic-shift modes (- index))))
 
-(define (handle-halt) '())
-(define (handle-add! get-0 get-1)
-  (do-math! + get-0 get-1))
-(define (handle-multiply! get-0 get-1)
-  (do-math! * get-0 get-1))
-(define (handle-store-input!)
-  (display "INPUT: " (current-error-port))
-  (set-reffed! (+ pos 1) (read)))
-(define (handle-output get-0)
-  (display "OUTPUT: " (current-error-port))
-  (display (get-0 (+ pos 1)))
-  (newline))
+(define (make-intcode-machine program)
+  (letrec ((pos (make-parameter 0))
+           (advance!
+             (lambda (count)
+               (pos (+ count (pos)))))
 
-(define (handle-jump-if! test)
-  (lambda (get-0 get-1)
-    (if (test (get-0 (+ pos 1)))
-        (set! pos (get-1 (+ pos 2)))
-        (advance! 3))))
-(define handle-jump-if-true!
-  (handle-jump-if! (compose not zero?)))
-(define handle-jump-if-false!
-  (handle-jump-if! zero?))
+           (get-at
+             (lambda (pos)
+               (vector-ref program pos)))
+           (get-reffed
+             (lambda (ref-pos)
+               (get-at (get-at ref-pos))))
 
-(define (handle-cmp! test)
-  (lambda (get-0 get-1)
-    (set-reffed! (+ pos 3)
-                 (if (test (get-0 (+ pos 1))
-                           (get-1 (+ pos 2)))
-                     1
-                     0))))
-(define handle-less-than!
-  (handle-cmp! <))
-(define handle-equals!
-  (handle-cmp! =))
+           (set-at!
+             (lambda (pos val)
+               (vector-set! program pos val)))
+           (set-reffed!
+             (lambda (ref-pos val)
+               (set-at! (get-at ref-pos) val)))
 
-(define (handle!)
-  (let* ((instruction (get-at pos))
-         (opcode (opcode-part instruction))
-         (modes (modes-part instruction)))
-    ;(debug)
-    (cond
-      ((= opcode 99) (handle-halt))
+           ; parameter modes
+           (position (wrapper get-reffed))
+           (immediate (wrapper get-at))
+           (mode-proc
+             (lambda (modes index)
+               (if (= 0 (mode modes index))
+                   position
+                   immediate)))
 
-      ((= opcode 1) (apply handle-add! (mode-procs modes 2))
-                    (advance! 4)
-                    (handle!))
+           (args
+             (lambda (count modes)
+               (let loop ((index 0))
+                 (if (= index count) '()
+                     (cons ((mode-proc modes index) (+ (pos) index 1))
+                           (loop (+ index 1)))))))
 
-      ((= opcode 2) (apply handle-multiply! (mode-procs modes 2))
-                    (advance! 4)
-                    (handle!))
+           ; reusable operation archetypes
+           (operation-math
+             (lambda (operation)
+               (lambda (a b dest)
+                 (set-at! dest (operation a b)))))
+           (operation-jump-if
+             (lambda (test)
+               (lambda (arg dest)
+                 (if (test arg)
+                     (pos dest)
+                     ; TODO: there's probably a more interesting way to
+                     ; do this conditional advancement
+                     (advance! 3)))))
+           (operation-compare
+             (lambda (cmp)
+               (lambda (a b dest)
+                 (let ((result (if (cmp a b) 1 0)))
+                   (set-at! dest result)))))
 
-      ((= opcode 3) (handle-store-input!)
-                    (advance! 2)
-                    (handle!))
+           ; the operations themselves
+           (do-add! (wrapper (operation-math +)))
+           (do-multiply! (wrapper (operation-math *)))
+           (do-jump-if-true! (wrapper (operation-jump-if (compose not zero?))))
+           (do-jump-if-false! (wrapper (operation-jump-if zero?)))
+           (do-less-than! (wrapper (operation-compare <)))
+           (do-equals! (wrapper (operation-compare =)))
+           (do-store-input!
+             (lambda (dest)
+               (display "INPUT: " (current-error-port))
+               (set-at! dest (read))))
+           (do-output
+             (lambda (val)
+               (display "OUTPUT: " (current-error-port))
+               (display val)
+               (newline)))
+           (do-halt (lambda () '())))
 
-      ((= opcode 4) (apply handle-output (mode-procs modes 1))
-                    (advance! 2)
-                    (handle!))
+    (letrec ((operation-mapping
+               ; format: (opcode func num-args mode-mask advance? continue?)
+               `((1  ,do-add!            3 #b100 #t #t)
+                 (2  ,do-multiply!       3 #b100 #t #t)
+                 (3  ,do-store-input!    1 #b1   #t #t)
+                 (4  ,do-output          1 #b0   #t #t)
+                 (5  ,do-jump-if-true!   2 #b00  #f #t)
+                 (6  ,do-jump-if-false!  2 #b00  #f #t)
+                 (7  ,do-less-than!      3 #b100 #t #t)
+                 (8  ,do-equals!         3 #b100 #t #t)
+                 (99 ,do-halt            0 #b0   #f #f)))
 
-      ((= opcode 5) (apply handle-jump-if-true! (mode-procs modes 2))
-                    (handle!))
+             (debug
+               (lambda ()
+                 (print "POSITION: " (pos) " PROGRAM: " program)))
 
-      ((= opcode 6) (apply handle-jump-if-false! (mode-procs modes 2))
-                    (handle!))
-
-      ((= opcode 7) (apply handle-less-than! (mode-procs modes 2))
-                    (advance! 4)
-                    (handle!))
-
-      ((= opcode 8) (apply handle-equals! (mode-procs modes 2))
-                    (advance! 4)
-                    (handle!))
-      )))
-
-(define (seq start stop)
-  (let loop ((value start)
-             (result '()))
-    (if (> value stop)
-        result
-        (loop (+ value 1) (cons value result)))))
-
-(define (empty? list)
-  (eqv? list '()))
+             (handle!
+               (lambda ()
+                 ;(debug)
+                 (let* ((instruction (get-at (pos)))
+                        (opcode (opcode-part instruction))
+                        (modes (decbin->bin (modes-part instruction))))
+                   (let-values (((func num-args mode-mask advance? continue?)
+                                 (apply values (cdr (assq opcode operation-mapping)))))
+                     (let* ((modes (bitwise-ior modes mode-mask))
+                            (args (args num-args modes)))
+                       ;(print "OPCODE: " opcode
+                       ;       " MODES: " modes
+                       ;       " FUNC: " func
+                       ;       " ARGS: " args)
+                       (apply func args))
+                     (when advance? (advance! (+ 1 num-args)))
+                     (when continue? (handle!)))))))
+      handle!)))
 
 (define (main args)
   (if (null? args)
       (display "Please provide the name of a program file to load.")
-      (begin
-        (load! (car args))
-        (handle!))))
+      (let* ((program (read-program-from-file (car args)))
+             (computer (make-intcode-machine program)))
+        (computer))))
 
 (main (command-line-arguments))
