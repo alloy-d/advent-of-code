@@ -1,18 +1,22 @@
+(load "../intcode.so")
 (import (chicken io)
-        (chicken process))
+        (chicken process)
+        intcode)
 
-(define (run-computer)
-  (process* "../intcode-machine" '("input")))
+(define input-program (read-program-from-file "input"))
 
-(define (get-amplifier-signal phase-setting input)
+(define (get-amplifier-signal phase-setting input-value)
   (let-values
-    (((computer-out computer-in computer-pid computer-err) (run-computer)))
+    (((computer input output) (make-intcode-machine input-program))
+     ((output-value) (make-parameter '())))
 
-    (write-line (number->string phase-setting) computer-in)
-    (write-line (number->string input) computer-in)
+    (input (lambda ()
+             (input (constantly input-value))
+             phase-setting))
+    (output output-value)
 
-    (process-wait computer-pid)
-    (read computer-out)))
+    (computer)
+    (output-value)))
 
 (define (get-amplifier-sequence-signal sequence)
   (let next ((phase-settings sequence)
