@@ -1,2 +1,4 @@
 input
 /intcode-machine
+*.so
+*.import.scm
