@@ -57,6 +57,18 @@
                (lambda (ref-pos val)
                  (set-at! (get-at ref-pos) val)))
 
+             ; I/O functions
+             ; parameterized so they can be passed in from elsewhere
+             (input (make-parameter
+                      (lambda ()
+                        (display "INPUT: " (current-error-port))
+                        (read))))
+             (output (make-parameter
+                       (lambda (val)
+                         (display "OUTPUT: " (current-error-port))
+                         (display val)
+                         (newline))))
+
              ; parameter modes
              (position (wrapper get-reffed))
              (immediate (wrapper get-at))
@@ -101,13 +113,8 @@
              (do-equals! (wrapper (operation-compare =)))
              (do-store-input!
                (lambda (dest)
-                 (display "INPUT: " (current-error-port))
-                 (set-at! dest (read))))
-             (do-output
-               (lambda (val)
-                 (display "OUTPUT: " (current-error-port))
-                 (display val)
-                 (newline)))
+                 (set-at! dest ((input)))))
+             (do-output (wrapper (output)))
              (do-halt (lambda () '())))
 
       (letrec ((operation-mapping
@@ -143,4 +150,4 @@
                          (apply func args))
                        (when advance? (advance! (+ 1 num-args)))
                        (when continue? (handle!)))))))
-        handle!))))
+        (values handle! input output)))))
