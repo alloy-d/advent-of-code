@@ -3,6 +3,7 @@
           (chicken base)
           (chicken bitwise)
           (chicken io)
+          (chicken port)
           (chicken string))
 
   ; like (define x func), except works in a letrec when func is also
@@ -11,6 +12,11 @@
     (syntax-rules ()
       ((wrapper func)
        (lambda args (apply func args)))))
+
+  (define print-error
+    (lambda args
+      (with-output-to-port (current-error-port)
+                           (lambda () (apply print args)))))
 
   (define (read-program)
     (list->vector
@@ -68,6 +74,8 @@
                          (display "OUTPUT: " (current-error-port))
                          (display val)
                          (newline))))
+             (halt (make-parameter
+                     (lambda () '())))
 
              ; parameter modes
              (position (wrapper get-reffed))
@@ -113,9 +121,12 @@
              (do-equals! (wrapper (operation-compare =)))
              (do-store-input!
                (lambda (dest)
-                 (set-at! dest ((input)))))
+                 (let ((value ((input))))
+                   (print-error "GOT INPUT VALUE: " value)
+                   (set-at! dest value)
+                 )))
              (do-output (wrapper (output)))
-             (do-halt (lambda () '())))
+             (do-halt (wrapper (halt))))
 
       (letrec ((operation-mapping
                  ; format: (opcode func num-args mode-mask advance? continue?)
@@ -131,11 +142,11 @@
 
                (debug
                  (lambda ()
-                   (print "POSITION: " (pos) " PROGRAM: " program)))
+                   (print-error "POSITION: " (pos) " PROGRAM: " program)))
 
                (handle!
                  (lambda ()
-                   ;(debug)
+                   (debug)
                    (let* ((instruction (get-at (pos)))
                           (opcode (opcode-part instruction))
                           (modes (decbin->bin (modes-part instruction))))
@@ -143,11 +154,11 @@
                                    (apply values (cdr (assq opcode operation-mapping)))))
                        (let* ((modes (bitwise-ior modes mode-mask))
                               (args (args num-args modes)))
-                         ;(print "OPCODE: " opcode
-                         ;       " MODES: " modes
-                         ;       " FUNC: " func
-                         ;       " ARGS: " args)
+                         (print-error "OPCODE: " opcode
+                                      " MODES: " modes
+                                      " FUNC: " func
+                                      " ARGS: " args)
                          (apply func args))
                        (when advance? (advance! (+ 1 num-args)))
                        (when continue? (handle!)))))))
-        (values handle! input output)))))
+        (values handle! input output halt)))))
