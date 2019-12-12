@@ -19,9 +19,11 @@
 
 (with-input-from-string "123456789012" (cut read-image 3 2))
 
+(define image-width 25)
+(define image-height 6)
 (define image
   (butlast
-    (with-input-from-file input-file (cut read-image 25 6))))
+    (with-input-from-file input-file (cut read-image image-width image-height))))
 
 ; takes many shortcuts because I know the digits are 0, 1, or 2.
 (define (count-digits-in-row row)
@@ -48,3 +50,24 @@
   (list 'min-zeroes min-zeroes
         'counts-for-layer counts-for-layer-with-min-zeroes
         'part-a-solution (apply * (drop counts-for-layer-with-min-zeroes 1))))
+
+(define (transparent? pixel)
+  (= pixel 2))
+(define (collapse-layers image)
+  (chop
+    (map (cut find (compose not transparent?) <>)
+         (apply zip
+                (map (cut apply append <>) image)))
+    image-width))
+(collapse-layers image)
+
+(define (print-layer layer)
+  (let* ((char-for-value (lambda (value)
+                           (case value
+                             ((0) #\X)
+                             ((1) #\space)
+                             ((2) #\?))))
+         (print-row (lambda (row)
+                      (print (list->string (map char-for-value row))))))
+    (for-each print-row layer)))
+(print-layer (collapse-layers image))
